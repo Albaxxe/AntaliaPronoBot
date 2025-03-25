@@ -1,0 +1,6 @@
+# Ignorer le fichier .env
+.env
+
+# Exemple : ignorer aussi les dossiers node_modules et logs
+node_modules
+logs
