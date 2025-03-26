@@ -8,7 +8,7 @@ const {
   ButtonBuilder,
   ButtonStyle 
 } = require('discord.js');
-const {
+const { 
   openTicketDB,
   updateTicketCategoryAndMoveChannel,
   closeTicketService
@@ -17,19 +17,21 @@ const {
 module.exports = {
   name: 'interactionCreate',
   async execute(interaction, client) {
-    // 1) Commandes slash
+    // ----------------------------
+    // 1) Gestion des commandes slash
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
       try {
         await command.execute(interaction);
       } catch (error) {
-        console.error('Erreur exécution commande slash :', error);
+        console.error('Erreur lors de l’exécution de la commande slash :', error);
       }
       return;
     }
-    
-    // 2) Autocomplete
+
+    // ----------------------------
+    // 2) Gestion de l'autocomplete
     if (interaction.isAutocomplete()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -42,31 +44,45 @@ module.exports = {
       }
       return;
     }
-    
-    // 3) Boutons
+
+    // ----------------------------
+    // 3) Gestion des interactions boutons
     if (interaction.isButton()) {
       // Bouton "Créer un ticket"
       if (interaction.customId === 'create_ticket') {
-        await interaction.deferReply({ ephemeral: true });
-        const guild = interaction.guild;
-        
-        // Vérifier si l'utilisateur a déjà un ticket
-        const existingChannel = guild.channels.cache.find(c => 
-          c.name.startsWith('ticket-') && c.name.includes(interaction.user.id)
-        );        
-        if (existingChannel) {
-          return interaction.followUp({ content: "Vous avez déjà un ticket ouvert.", ephemeral: true });
-        }
-        
         try {
-          // Récupérer STAFF_ROLE_IDS
+          await interaction.deferReply({ ephemeral: true });
+          const guild = interaction.guild;
+
+          // Débogage : lister les salons texte contenant l'ID de l'utilisateur
+          const matchingChannels = guild.channels.cache
+            .filter(c => c.type === ChannelType.GuildText && c.name.includes(interaction.user.id))
+            .map(c => c.name);
+          console.log("Salons existants pour cet utilisateur :", matchingChannels);
+
+          // Recherche uniquement dans les salons texte dont le nom commence par "ticket-"
+          const existingChannel = guild.channels.cache
+            .filter(c => c.type === ChannelType.GuildText)
+            .find(c => c.name.startsWith('ticket-') && c.name.includes(interaction.user.id));
+
+          if (existingChannel) {
+            console.log(`Ticket déjà ouvert : ${existingChannel.name}`);
+            return interaction.followUp({ content: "Vous avez déjà un ticket ouvert.", ephemeral: true });
+          }
+
+          // Récupération des rôles staff depuis STAFF_ROLE_IDS dans le .env
           const staffRolesEnv = process.env.STAFF_ROLE_IDS || '';
           if (!staffRolesEnv) {
             return interaction.followUp({ content: "Aucun rôle staff configuré (STAFF_ROLE_IDS).", ephemeral: true });
           }
           const staffRoleIds = staffRolesEnv.split(',').map(id => id.trim());
-          
-          // Permissions
+          // Vérifier que chaque rôle existe sur le serveur
+          const invalidRoles = staffRoleIds.filter(id => !guild.roles.cache.has(id));
+          if (invalidRoles.length > 0) {
+            return interaction.followUp({ content: `Les rôles suivants sont introuvables sur ce serveur : ${invalidRoles.join(', ')}`, ephemeral: true });
+          }
+
+          // Construction des permissionOverwrites
           const permissionOverwrites = [
             {
               id: guild.id,
@@ -74,25 +90,17 @@ module.exports = {
             },
             {
               id: interaction.user.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory
-              ],
+              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
             }
           ];
           staffRoleIds.forEach(roleId => {
             permissionOverwrites.push({
               id: roleId,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory
-              ],
+              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
             });
           });
-          
-          // Créer le salon
+
+          // Créer le salon de ticket
           const ticketCategoryId = process.env.TICKET_CATEGORY_ID || null;
           const channelName = `ticket-${interaction.user.id}`;
           const ticketChannel = await guild.channels.create({
@@ -102,18 +110,25 @@ module.exports = {
             permissionOverwrites
           });
           console.log(`Salon ticket créé: ${ticketChannel.id} pour ${interaction.user.tag}`);
-          
-          // Insérer en BDD
-          await openTicketDB(ticketChannel.id, interaction.user.id);
-          
-          // Embed initial
+
+          // Insertion en BDD du ticket
+          const newTicket = await openTicketDB(ticketChannel.id, interaction.user.id);
+          console.log('Ticket inséré en BDD :', newTicket);
+
+          // Création de l'embed initial pour le ticket
           const ticketEmbed = new EmbedBuilder()
             .setColor('#3498db')
             .setTitle('🎟️ Ticket Ouvert')
-            .setDescription(`Bonjour <@${interaction.user.id}> ! Sélectionnez la catégorie de votre demande via le menu ci-dessous.`)
+            .setDescription(`Bonjour <@${interaction.user.id}> !\nVeuillez sélectionner la catégorie de votre demande via le menu ci-dessous.`)
+            .addFields(
+              { name: 'Statut', value: 'Ouvert', inline: true },
+              { name: 'Date', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+            )
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/906/906794.png')
+            .setFooter({ text: 'Service Support' })
             .setTimestamp();
-          
-          // Menu déroulant (catégorie)
+
+          // Créer le menu déroulant pour la catégorie
           const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('ticket_category_select')
             .setPlaceholder('Choisissez une catégorie')
@@ -124,7 +139,7 @@ module.exports = {
               { label: 'Autre', value: 'Autre' }
             );
           const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-          
+
           // Bouton "Fermer le ticket"
           const closeButton = new ButtonBuilder()
             .setCustomId('close_ticket')
@@ -132,13 +147,14 @@ module.exports = {
             .setStyle(ButtonStyle.Danger)
             .setEmoji('🔒');
           const buttonRow = new ActionRowBuilder().addComponents(closeButton);
-          
+
+          // Envoyer l'embed dans le salon ticket
           await ticketChannel.send({
             content: `<@${interaction.user.id}>`,
             embeds: [ticketEmbed],
             components: [selectRow, buttonRow]
           });
-          
+
           await interaction.followUp({ content: `Votre ticket a été créé : ${ticketChannel}`, ephemeral: true });
         } catch (err) {
           console.error('Erreur lors de la création du ticket :', err);
@@ -147,28 +163,29 @@ module.exports = {
       }
       // Bouton "Fermer le ticket"
       else if (interaction.customId === 'close_ticket') {
-        await interaction.deferReply({ ephemeral: true });
         try {
-          // Fermer en BDD
+          await interaction.deferReply({ ephemeral: true });
+          // Mettre à jour la BDD pour fermer le ticket
           await closeTicketService(interaction.channel.id);
           // Supprimer le salon
           await interaction.channel.delete();
         } catch (err) {
-          console.error('Erreur fermeture ticket :', err);
-          await interaction.followUp({ content: "Erreur lors de la fermeture du ticket.", ephemeral: true });
+          console.error('Erreur lors de la fermeture du ticket :', err);
+          await interaction.followUp({ content: "Une erreur est survenue lors de la fermeture du ticket.", ephemeral: true });
         }
       }
     }
-    
-    // 4) Menu "ticket_category_select"
+
+    // ----------------------------
+    // 4) Gestion du menu déroulant "ticket_category_select"
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_category_select') {
       const chosenCategory = interaction.values[0];
       try {
-        // Renommer
+        // Renommer le salon pour inclure la catégorie
         await interaction.channel.setName(`ticket-${chosenCategory}-${interaction.user.id}`);
-        console.log(`Salon renommé en ticket-${chosenCategory}-${interaction.user.id}`);
+        console.log(`Salon renommé en: ticket-${chosenCategory}-${interaction.user.id}`);
         
-        // Mettre à jour BDD + déplacer salon
+        // Mettre à jour la catégorie en BDD et déplacer le salon dans la bonne catégorie
         await updateTicketCategoryAndMoveChannel(interaction.channel, chosenCategory);
         
         await interaction.reply({
@@ -176,14 +193,14 @@ module.exports = {
             new EmbedBuilder()
               .setColor('#2ecc71')
               .setTitle(`Catégorie définie : ${chosenCategory}`)
-              .setDescription(`Votre ticket est désormais classé en **${chosenCategory}**. Le staff vous répondra bientôt !`)
+              .setDescription(`Votre ticket est maintenant classé en **${chosenCategory}**. Un membre du staff vous répondra bientôt !`)
               .setTimestamp()
           ],
           ephemeral: true
         });
       } catch (error) {
-        console.error('Erreur set catégorie ticket :', error);
-        await interaction.reply({ content: "Une erreur est survenue lors de la configuration de la catégorie.", ephemeral: true });
+        console.error('Erreur lors de la mise à jour de la catégorie du ticket :', error);
+        await interaction.reply({ content: "Une erreur est survenue lors de la configuration de votre ticket.", ephemeral: true });
       }
     }
   }
