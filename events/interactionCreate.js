@@ -51,7 +51,9 @@ module.exports = {
         const guild = interaction.guild;
         
         // Vérifier si l'utilisateur a déjà un ticket
-        const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${interaction.user.id}`);
+        const existingChannel = guild.channels.cache.find(c => 
+          c.name.startsWith('ticket-') && c.name.includes(interaction.user.id)
+        );        
         if (existingChannel) {
           return interaction.followUp({ content: "Vous avez déjà un ticket ouvert.", ephemeral: true });
         }
