@@ -33,6 +33,8 @@ module.exports = {
     // Envoyer le panel de ticket en utilisant le service dédié et la variable HELP_CHANNEL_IP
     await sendTicketPanel(client);
 
+    await updateApiData();
+
     // Récupérer le salon pour l'embed de status
     const channelId = process.env.STATUS_CHANNEL_ID || '1352848213018677292';
     const channel = client.channels.cache.get(channelId);
