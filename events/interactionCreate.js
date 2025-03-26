@@ -1,4 +1,4 @@
-// src/events/interactionCreate.js
+// events/interactionCreate.js
 const { 
   ChannelType,
   PermissionFlagsBits,
@@ -8,28 +8,28 @@ const {
   ButtonBuilder,
   ButtonStyle 
 } = require('discord.js');
-
-const { 
+const {
+  openTicketDB,
   updateTicketCategoryAndMoveChannel,
-  closeTicketService 
+  closeTicketService
 } = require('../services/ticketService');
 
 module.exports = {
   name: 'interactionCreate',
   async execute(interaction, client) {
-    // 1) Gestion des commandes slash
+    // 1) Commandes slash
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
       try {
         await command.execute(interaction);
       } catch (error) {
-        console.error('Erreur lors de l\'exécution de la commande slash :', error);
+        console.error('Erreur exécution commande slash :', error);
       }
       return;
     }
     
-    // 2) Gestion de l'autocomplete
+    // 2) Autocomplete
     if (interaction.isAutocomplete()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -43,36 +43,28 @@ module.exports = {
       return;
     }
     
-    // 3) Gestion des interactions boutons
+    // 3) Boutons
     if (interaction.isButton()) {
-      // Bouton "Créer un ticket" (venant du panel)
+      // Bouton "Créer un ticket"
       if (interaction.customId === 'create_ticket') {
+        await interaction.deferReply({ ephemeral: true });
+        const guild = interaction.guild;
+        
+        // Vérifier si l'utilisateur a déjà un ticket
+        const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${interaction.user.id}`);
+        if (existingChannel) {
+          return interaction.followUp({ content: "Vous avez déjà un ticket ouvert.", ephemeral: true });
+        }
+        
         try {
-          await interaction.deferReply({ ephemeral: true });
-          const guild = interaction.guild;
-          
-          // Vérifier si l'utilisateur a déjà un ticket ouvert
-          const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${interaction.user.id}`);
-          if (existingChannel) {
-            return interaction.followUp({ content: "Vous avez déjà un ticket ouvert.", ephemeral: true });
-          }
-          
-          // Récupérer la variable STAFF_ROLE_IDS depuis le .env (gérée dans le service ticketService.js par ailleurs)
-          // Ici, on suppose que la création du salon et l'insertion en BDD se font directement dans ce bloc
-          // (la logique d'insertion en BDD devrait être dans ticketDBService.js, appelée via le service métier)
-          
-          // Construction des permissions
-          const staffRolesEnv = process.env.STAFF_ROLE_IDS;
+          // Récupérer STAFF_ROLE_IDS
+          const staffRolesEnv = process.env.STAFF_ROLE_IDS || '';
           if (!staffRolesEnv) {
-            return interaction.followUp({ content: "Aucun rôle staff n'est configuré (STAFF_ROLE_IDS).", ephemeral: true });
+            return interaction.followUp({ content: "Aucun rôle staff configuré (STAFF_ROLE_IDS).", ephemeral: true });
           }
           const staffRoleIds = staffRolesEnv.split(',').map(id => id.trim());
-          // Vérification minimale des rôles présents dans le serveur
-          const invalidRoles = staffRoleIds.filter(id => !guild.roles.cache.has(id));
-          if (invalidRoles.length > 0) {
-            return interaction.followUp({ content: `Les rôles suivants sont introuvables sur ce serveur : ${invalidRoles.join(', ')}`, ephemeral: true });
-          }
           
+          // Permissions
           const permissionOverwrites = [
             {
               id: guild.id,
@@ -80,17 +72,25 @@ module.exports = {
             },
             {
               id: interaction.user.id,
-              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory
+              ],
             }
           ];
           staffRoleIds.forEach(roleId => {
             permissionOverwrites.push({
               id: roleId,
-              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory
+              ],
             });
           });
           
-          // Créer le salon de ticket
+          // Créer le salon
           const ticketCategoryId = process.env.TICKET_CATEGORY_ID || null;
           const channelName = `ticket-${interaction.user.id}`;
           const ticketChannel = await guild.channels.create({
@@ -101,24 +101,17 @@ module.exports = {
           });
           console.log(`Salon ticket créé: ${ticketChannel.id} pour ${interaction.user.tag}`);
           
-          // Insertion en BDD via createTicket (appelé dans ticketDBService.js via le service métier)
-          // Par exemple, si openTicket() est dans un service métier, il aura été appelé dans la commande de création
-          // Ici, pour simplifier, on ne l'inclut pas directement, mais assure-toi qu'une insertion a lieu.
+          // Insérer en BDD
+          await openTicketDB(ticketChannel.id, interaction.user.id);
           
-          // Créer l'embed initial pour le salon ticket (amélioré)
+          // Embed initial
           const ticketEmbed = new EmbedBuilder()
             .setColor('#3498db')
             .setTitle('🎟️ Ticket Ouvert')
-            .setDescription(`Bonjour <@${interaction.user.id}> ! Merci d'avoir ouvert un ticket.\n\nVeuillez sélectionner la catégorie de votre demande via le menu ci-dessous.`)
-            .addFields(
-              { name: 'Statut', value: 'Ouvert', inline: true },
-              { name: 'Date', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
-            )
-            .setThumbnail('https://cdn-icons-png.flaticon.com/512/906/906794.png')
-            .setFooter({ text: 'Service Support', iconURL: 'https://cdn-icons-png.flaticon.com/512/906/906794.png' })
+            .setDescription(`Bonjour <@${interaction.user.id}> ! Sélectionnez la catégorie de votre demande via le menu ci-dessous.`)
             .setTimestamp();
           
-          // Créer le menu déroulant pour choisir la catégorie
+          // Menu déroulant (catégorie)
           const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('ticket_category_select')
             .setPlaceholder('Choisissez une catégorie')
@@ -130,7 +123,7 @@ module.exports = {
             );
           const selectRow = new ActionRowBuilder().addComponents(selectMenu);
           
-          // Bouton pour fermer le ticket
+          // Bouton "Fermer le ticket"
           const closeButton = new ButtonBuilder()
             .setCustomId('close_ticket')
             .setLabel('Fermer le ticket')
@@ -138,11 +131,10 @@ module.exports = {
             .setEmoji('🔒');
           const buttonRow = new ActionRowBuilder().addComponents(closeButton);
           
-          // Envoyer l'embed dans le salon ticket
           await ticketChannel.send({
             content: `<@${interaction.user.id}>`,
             embeds: [ticketEmbed],
-            components: [selectRow, buttonRow],
+            components: [selectRow, buttonRow]
           });
           
           await interaction.followUp({ content: `Votre ticket a été créé : ${ticketChannel}`, ephemeral: true });
@@ -153,44 +145,43 @@ module.exports = {
       }
       // Bouton "Fermer le ticket"
       else if (interaction.customId === 'close_ticket') {
+        await interaction.deferReply({ ephemeral: true });
         try {
-          await interaction.deferReply({ ephemeral: true });
-          // Mise à jour en BDD (fermeture du ticket)
+          // Fermer en BDD
           await closeTicketService(interaction.channel.id);
           // Supprimer le salon
           await interaction.channel.delete();
         } catch (err) {
-          console.error('Erreur lors de la fermeture du ticket :', err);
-          await interaction.followUp({ content: "Une erreur est survenue lors de la fermeture du ticket.", ephemeral: true });
+          console.error('Erreur fermeture ticket :', err);
+          await interaction.followUp({ content: "Erreur lors de la fermeture du ticket.", ephemeral: true });
         }
       }
     }
     
-    // 4) Gestion des menus déroulants pour la sélection de catégorie
+    // 4) Menu "ticket_category_select"
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_category_select') {
       const chosenCategory = interaction.values[0];
       try {
-        // Renommer le salon pour y inclure la catégorie
+        // Renommer
         await interaction.channel.setName(`ticket-${chosenCategory}-${interaction.user.id}`);
-        console.log(`Salon renommé en: ticket-${chosenCategory}-${interaction.user.id}`);
+        console.log(`Salon renommé en ticket-${chosenCategory}-${interaction.user.id}`);
         
-        // Mettre à jour la BDD et déplacer le salon dans la catégorie Discord correspondante
+        // Mettre à jour BDD + déplacer salon
         await updateTicketCategoryAndMoveChannel(interaction.channel, chosenCategory);
         
-        // Répondre à l'interaction
         await interaction.reply({
           embeds: [
             new EmbedBuilder()
               .setColor('#2ecc71')
               .setTitle(`Catégorie définie : ${chosenCategory}`)
-              .setDescription(`Votre ticket est maintenant classé dans la catégorie **${chosenCategory}**.\nUn membre du staff vous répondra bientôt !`)
+              .setDescription(`Votre ticket est désormais classé en **${chosenCategory}**. Le staff vous répondra bientôt !`)
               .setTimestamp()
           ],
           ephemeral: true
         });
       } catch (error) {
-        console.error('Erreur lors de la mise à jour de la catégorie du ticket :', error);
-        await interaction.reply({ content: "Une erreur est survenue lors de la configuration de votre ticket.", ephemeral: true });
+        console.error('Erreur set catégorie ticket :', error);
+        await interaction.reply({ content: "Une erreur est survenue lors de la configuration de la catégorie.", ephemeral: true });
       }
     }
   }
