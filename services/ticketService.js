@@ -54,7 +54,7 @@ async function sendTicketPanel(client) {
         .setStyle(ButtonStyle.Primary)
     );
     console.log(`Envoi du panel dans le salon ID: ${helpChannelId}, name: ${panelChannel?.name}`);
-    
+
     try {
       panelMessage = await panelChannel.send({ embeds: [panelEmbed], components: [buttonRow] });
       console.log('✅ Panel de ticket envoyé.');
