@@ -1,4 +1,4 @@
-// src/services/ticketService.js
+// services/ticketService.js
 const { 
   EmbedBuilder, 
   ActionRowBuilder, 
@@ -9,71 +9,10 @@ const { createTicket, updateTicketCategory, closeTicket } = require('./ticketDBS
 require('dotenv').config();
 
 /**
- * Envoie le panel de ticket dans le salon d'aide défini par HELP_CHANNEL_IP.
- */
-async function sendTicketPanel(client) {
-  const helpChannelId = process.env.HELP_CHANNEL_IP;
-  if (!helpChannelId) {
-    console.error('HELP_CHANNEL_IP non défini dans .env.');
-    return;
-  }
-
-  const panelChannel = client.channels.cache.get(helpChannelId);
-  if (!panelChannel) {
-    console.error(`Salon de ticket non trouvé pour l'ID: ${helpChannelId}`);
-    return;
-  }
-
-  let panelMessage;
-  try {
-    const fetchedMessages = await panelChannel.messages.fetch({ limit: 10 });
-    panelMessage = fetchedMessages.find(msg =>
-      msg.author.id === client.user.id &&
-      msg.embeds.length > 0 &&
-      msg.embeds[0].footer &&
-      msg.embeds[0].footer.text === 'Ticket Panel'
-    );
-  } catch (error) {
-    console.error('❌ Erreur lors de la récupération du panel :', error);
-  }
-
-  if (!panelMessage) {
-    const panelEmbed = new EmbedBuilder()
-      .setColor('#2ecc71')
-      .setTitle('📩 Support Tickets')
-      .setDescription("Cliquez sur le bouton ci-dessous pour créer un ticket.\n\nNotre équipe vous répondra dès que possible !")
-      .setFooter({ text: 'Ticket Panel' })
-      .setTimestamp();
-
-    const buttonRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('create_ticket')
-        .setLabel('Créer un ticket')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('📝')
-    );
-    console.log(`Envoi du panel dans le salon ID: ${helpChannelId}, name: ${panelChannel?.name}`);
-    
-    try {
-      panelMessage = await panelChannel.send({ embeds: [panelEmbed], components: [buttonRow] });
-      console.log('✅ Panel de ticket envoyé.');
-    } catch (error) {
-      console.error('❌ Erreur lors de l’envoi du panel :', error);
-    }
-  } else {
-    console.log('ℹ️ Un panel de ticket existe déjà.');
-  }
-}
-
-/**
- * Met à jour la catégorie du ticket et déplace le salon dans la catégorie Discord correspondante.
- * Ajoute des logs pour suivre l'opération.
- * @param {TextChannel} channel - Le salon du ticket.
- * @param {string} chosenCategory - La catégorie choisie (par ex. "SAV", "Question", "Problème Technique", "Autre").
- * @returns {Promise<Object>} Le ticket mis à jour en BDD.
+ * Met à jour la catégorie en BDD et déplace le salon dans la catégorie Discord correspondante.
  */
 async function updateTicketCategoryAndMoveChannel(channel, chosenCategory) {
-  // Mapping des catégories via les variables d'environnement
+  // Mapping
   const categoryMap = {
     'SAV': process.env.ID_CATEGORIE_SAV,
     'Question': process.env.ID_CATEGORIE_QUESTION,
@@ -81,48 +20,63 @@ async function updateTicketCategoryAndMoveChannel(channel, chosenCategory) {
     'Autre': process.env.ID_CATEGORIE_AUTRE
   };
 
+  // 1) Déplacer le salon
   const parentId = categoryMap[chosenCategory];
   if (!parentId) {
-    console.warn(`⚠️ Aucune catégorie Discord définie pour ${chosenCategory}. Vérifiez .env et le mapping.`);
+    console.warn(`⚠️ Aucune catégorie définie pour "${chosenCategory}". Vérifiez .env et le mapping.`);
   } else {
     try {
-      console.log(`Tentative de déplacement du salon ${channel.name} vers la catégorie ID = ${parentId}`);
+      console.log(`Tentative de déplacement du salon ${channel.name} vers la catégorie ID=${parentId}`);
       await channel.setParent(parentId, { lockPermissions: false });
       console.log(`✅ Salon ${channel.name} déplacé dans la catégorie.`);
-    } catch (error) {
-      console.error('❌ Erreur lors du déplacement du salon :', error);
+    } catch (err) {
+      console.error(`❌ Erreur setParent pour ${channel.name}:`, err);
     }
   }
 
-  // Mise à jour en BDD
+  // 2) Mettre à jour en BDD
   try {
-    const updatedTicket = await updateTicketCategory(channel.id, chosenCategory);
-    console.log(`✅ BDD : Ticket (channel ${channel.id}) mis à jour avec la catégorie "${chosenCategory}".`);
-    return updatedTicket;
+    const updated = await updateTicketCategory(channel.id, chosenCategory);
+    console.log(`✅ BDD : Ticket (channel=${channel.id}) maj category="${chosenCategory}" ->`, updated);
+    return updated;
   } catch (error) {
-    console.error('❌ Erreur lors de la mise à jour de la BDD pour le ticket (channel ' + channel.id + '):', error);
+    console.error(`❌ Erreur updateTicketCategoryAndMoveChannel (channel=${channel.id}):`, error);
     throw error;
   }
 }
 
 /**
- * Ferme un ticket : met à jour la BDD et retourne le ticket fermé.
- * @param {string|number} channelId - L'ID du salon.
- * @returns {Promise<Object>} Le ticket fermé.
+ * Ferme un ticket en BDD (statut='closed').
  */
 async function closeTicketService(channelId) {
   try {
-    const closedTicket = await closeTicket(channelId);
-    console.log(`✅ Ticket (channel ${channelId}) fermé en BDD.`);
-    return closedTicket;
+    const closed = await closeTicket(channelId);
+    console.log(`✅ Ticket fermé en BDD pour channel=${channelId}:`, closed);
+    return closed;
   } catch (error) {
-    console.error(`❌ Erreur lors de la fermeture du ticket (channel ${channelId}) en BDD:`, error);
+    console.error(`❌ Erreur closeTicketService (channel=${channelId}):`, error);
+    throw error;
+  }
+}
+
+/**
+ * Crée un ticket en BDD après avoir créé le salon. 
+ * @param {string} channelId - ID du salon
+ * @param {string} userId - ID de l'utilisateur
+ */
+async function openTicketDB(channelId, userId) {
+  try {
+    const inserted = await createTicket(channelId, userId);
+    console.log(`✅ openTicketDB: ticket inséré ->`, inserted);
+    return inserted;
+  } catch (error) {
+    console.error(`❌ Erreur openTicketDB (channel=${channelId}, user=${userId}):`, error);
     throw error;
   }
 }
 
 module.exports = {
-  sendTicketPanel,
   updateTicketCategoryAndMoveChannel,
-  closeTicketService
+  closeTicketService,
+  openTicketDB
 };

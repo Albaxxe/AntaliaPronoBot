@@ -1,11 +1,8 @@
-// src/services/ticketDBService.js
+// services/ticketDBService.js
 const db = require('../utils/database');
 
 /**
  * Crée un ticket dans la table `tickets`.
- * @param {string|number} channelId - L'ID du salon Discord.
- * @param {string|number} userId - L'ID de l'utilisateur (Discord).
- * @returns {Promise<Object>} Le ticket inséré.
  */
 async function createTicket(channelId, userId) {
   const query = `
@@ -16,19 +13,16 @@ async function createTicket(channelId, userId) {
   const values = [channelId, userId];
   try {
     const result = await db.query(query, values);
-    console.log(`✅ Ticket créé en BDD pour channel ${channelId} et user ${userId}:`, result.rows[0]);
+    console.log(`✅ Ticket créé en BDD (channel=${channelId}, user=${userId}):`, result.rows[0]);
     return result.rows[0];
   } catch (error) {
-    console.error(`❌ Erreur lors de la création du ticket (channel ${channelId}, user ${userId}):`, error);
+    console.error(`❌ Erreur lors de la création du ticket (channel=${channelId}, user=${userId}):`, error);
     throw error;
   }
 }
 
 /**
- * Met à jour la catégorie du ticket dans la BDD.
- * @param {string|number} channelId - L'ID du salon.
- * @param {string} category - La catégorie choisie.
- * @returns {Promise<Object>} Le ticket mis à jour.
+ * Met à jour la catégorie d'un ticket (et updated_at).
  */
 async function updateTicketCategory(channelId, category) {
   const query = `
@@ -41,18 +35,16 @@ async function updateTicketCategory(channelId, category) {
   const values = [channelId, category];
   try {
     const result = await db.query(query, values);
-    console.log(`✅ Ticket (channel ${channelId}) mis à jour en BDD avec la catégorie "${category}":`, result.rows[0]);
+    console.log(`✅ Ticket (channel=${channelId}) mis à jour avec category="${category}":`, result.rows[0]);
     return result.rows[0];
   } catch (error) {
-    console.error(`❌ Erreur lors de la mise à jour du ticket (channel ${channelId}) en BDD:`, error);
+    console.error(`❌ Erreur updateTicketCategory (channel=${channelId}):`, error);
     throw error;
   }
 }
 
 /**
- * Ferme le ticket (statut = 'closed') dans la BDD.
- * @param {string|number} channelId - L'ID du salon.
- * @returns {Promise<Object>} Le ticket mis à jour.
+ * Ferme un ticket (statut = 'closed').
  */
 async function closeTicket(channelId) {
   const query = `
@@ -62,13 +54,12 @@ async function closeTicket(channelId) {
     WHERE channel_id = $1
     RETURNING *;
   `;
-  const values = [channelId];
   try {
-    const result = await db.query(query, values);
-    console.log(`✅ Ticket (channel ${channelId}) fermé en BDD:`, result.rows[0]);
+    const result = await db.query(query, [channelId]);
+    console.log(`✅ Ticket fermé (channel=${channelId}):`, result.rows[0]);
     return result.rows[0];
   } catch (error) {
-    console.error(`❌ Erreur lors de la fermeture du ticket (channel ${channelId}) en BDD:`, error);
+    console.error(`❌ Erreur closeTicket (channel=${channelId}):`, error);
     throw error;
   }
 }
