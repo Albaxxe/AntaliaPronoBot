@@ -9,6 +9,7 @@
   "dependencies": {
     "@discordjs/rest": "^2.3.0",
     "axios": "^1.6.7",
+    "bottleneck": "^2.19.5",
     "discord-api-types": "^0.37.67",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
