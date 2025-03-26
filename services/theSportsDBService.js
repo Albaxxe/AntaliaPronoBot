@@ -1,5 +1,5 @@
 // src/services/theSportsDBService.js
-const { fetchData } = require('./apiRequestsService');
+const { fetchData } = require('./apiRequestService');
 
 async function getEventDetails(eventId) {
   const apiKey = process.env.THE_SPORTSDB_API_KEY;
