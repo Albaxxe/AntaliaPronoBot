@@ -9,9 +9,7 @@ const { createTicket, updateTicketCategory, closeTicket } = require('./ticketDBS
 require('dotenv').config();
 
 /**
- * Envoie le panel de ticket dans le salon défini par HELP_CHANNEL_IP.
- * Si un panel existe déjà (identifié par son footer "Ticket Panel"), il n'envoie pas un nouveau message.
- * @param {Client} client - Le client Discord
+ * Envoie le panel de ticket dans le salon d'aide défini par HELP_CHANNEL_IP.
  */
 async function sendTicketPanel(client) {
   const helpChannelId = process.env.HELP_CHANNEL_IP;
@@ -42,8 +40,8 @@ async function sendTicketPanel(client) {
   if (!panelMessage) {
     const panelEmbed = new EmbedBuilder()
       .setColor('#2ecc71')
-      .setTitle('Support Tickets')
-      .setDescription("Cliquez sur le bouton ci-dessous pour créer un ticket.")
+      .setTitle('📩 Support Tickets')
+      .setDescription("Cliquez sur le bouton ci-dessous pour créer un ticket.\n\nNotre équipe vous répondra dès que possible !")
       .setFooter({ text: 'Ticket Panel' })
       .setTimestamp();
 
@@ -52,9 +50,10 @@ async function sendTicketPanel(client) {
         .setCustomId('create_ticket')
         .setLabel('Créer un ticket')
         .setStyle(ButtonStyle.Primary)
+        .setEmoji('📝')
     );
     console.log(`Envoi du panel dans le salon ID: ${helpChannelId}, name: ${panelChannel?.name}`);
-
+    
     try {
       panelMessage = await panelChannel.send({ embeds: [panelEmbed], components: [buttonRow] });
       console.log('✅ Panel de ticket envoyé.');
@@ -67,11 +66,11 @@ async function sendTicketPanel(client) {
 }
 
 /**
- * Met à jour la catégorie du ticket en BDD et déplace le salon Discord dans la catégorie correspondante.
- * Le mapping des catégories est défini via des variables d'environnement.
- * @param {TextChannel} channel - Le salon du ticket
- * @param {string} chosenCategory - La catégorie choisie (par ex. "SAV", "Question", "Problème Technique", "Autre")
- * @returns {Promise<Object>} Le ticket mis à jour (selon la BDD)
+ * Met à jour la catégorie du ticket et déplace le salon dans la catégorie Discord correspondante.
+ * Ajoute des logs pour suivre l'opération.
+ * @param {TextChannel} channel - Le salon du ticket.
+ * @param {string} chosenCategory - La catégorie choisie (par ex. "SAV", "Question", "Problème Technique", "Autre").
+ * @returns {Promise<Object>} Le ticket mis à jour en BDD.
  */
 async function updateTicketCategoryAndMoveChannel(channel, chosenCategory) {
   // Mapping des catégories via les variables d'environnement
@@ -83,29 +82,47 @@ async function updateTicketCategoryAndMoveChannel(channel, chosenCategory) {
   };
 
   const parentId = categoryMap[chosenCategory];
-  if (parentId) {
-    try {
-      await channel.setParent(parentId);
-      console.log(`Le salon ${channel.name} a été déplacé dans la catégorie correspondante.`);
-    } catch (error) {
-      console.error('Erreur lors du changement de catégorie du salon :', error);
-    }
+  if (!parentId) {
+    console.warn(`⚠️ Aucune catégorie Discord définie pour ${chosenCategory}. Vérifiez .env et le mapping.`);
   } else {
-    console.warn('Aucune catégorie définie pour la valeur:', chosenCategory);
+    try {
+      console.log(`Tentative de déplacement du salon ${channel.name} vers la catégorie ID = ${parentId}`);
+      await channel.setParent(parentId, { lockPermissions: false });
+      console.log(`✅ Salon ${channel.name} déplacé dans la catégorie.`);
+    } catch (error) {
+      console.error('❌ Erreur lors du déplacement du salon :', error);
+    }
   }
 
-  // Mise à jour du ticket en BDD
+  // Mise à jour en BDD
   try {
     const updatedTicket = await updateTicketCategory(channel.id, chosenCategory);
-    console.log(`La catégorie du ticket (channel ${channel.id}) a été mise à jour en BDD.`);
+    console.log(`✅ BDD : Ticket (channel ${channel.id}) mis à jour avec la catégorie "${chosenCategory}".`);
     return updatedTicket;
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la catégorie du ticket en BDD:', error);
+    console.error('❌ Erreur lors de la mise à jour de la BDD pour le ticket (channel ' + channel.id + '):', error);
+    throw error;
+  }
+}
+
+/**
+ * Ferme un ticket : met à jour la BDD et retourne le ticket fermé.
+ * @param {string|number} channelId - L'ID du salon.
+ * @returns {Promise<Object>} Le ticket fermé.
+ */
+async function closeTicketService(channelId) {
+  try {
+    const closedTicket = await closeTicket(channelId);
+    console.log(`✅ Ticket (channel ${channelId}) fermé en BDD.`);
+    return closedTicket;
+  } catch (error) {
+    console.error(`❌ Erreur lors de la fermeture du ticket (channel ${channelId}) en BDD:`, error);
     throw error;
   }
 }
 
 module.exports = {
   sendTicketPanel,
-  updateTicketCategoryAndMoveChannel
+  updateTicketCategoryAndMoveChannel,
+  closeTicketService
 };
