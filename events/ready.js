@@ -30,6 +30,9 @@ module.exports = {
     // Synchroniser tous les membres existants dans la BDD
     await syncMembers.execute(client);
 
+    // Exemple: On fetch l'event ID=1032862 au démarrage
+    await fetchAndStoreEvent(1032862);
+
     // Envoyer le panel de ticket en utilisant le service dédié et la variable HELP_CHANNEL_IP
     await sendTicketPanel(client);
 
