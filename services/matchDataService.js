@@ -11,18 +11,19 @@ async function fetchAndStoreUpcomingMatches(teamName) {
       logger.error("fetchAndStoreUpcomingMatches -> API_KEY_THE_SPORTS_DB non défini.");
       return;
     }
-    // Utilisation de l'endpoint "eventsnext.php?t="
+    // Utilisation de l'endpoint eventsnext.php pour récupérer les matchs à venir
     const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsnext.php?t=${encodeURIComponent(teamName)}`;
     logger.info(`fetchAndStoreUpcomingMatches -> Récupération des matchs à venir pour ${teamName}`);
     const data = await fetchData(url);
     if (data && data.events && data.events.length > 0) {
       for (const event of data.events) {
         const query = `
-          INSERT INTO upcoming_matches (id_event, strEvent, dateEvent)
-          VALUES ($1, $2, $3)
+          INSERT INTO api_events (id_event, strEvent, dateEvent, isUpcoming)
+          VALUES ($1, $2, $3, true)
           ON CONFLICT (id_event) DO UPDATE
             SET strEvent = EXCLUDED.strEvent,
                 dateEvent = EXCLUDED.dateEvent,
+                isUpcoming = true,
                 updated_at = CURRENT_TIMESTAMP;
         `;
         const values = [event.idEvent, event.strEvent, event.dateEvent];
