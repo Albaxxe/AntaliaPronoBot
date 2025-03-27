@@ -11,27 +11,35 @@ async function fetchAndStoreUpcomingMatchesForLeague(leagueId) {
       logger.error("fetchAndStoreUpcomingMatchesForLeague -> API_KEY_THE_SPORTS_DB non défini.");
       return;
     }
-    // Utilisation de l'endpoint eventsnextleague.php pour récupérer les matchs à venir d'une ligue
     const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsnextleague.php?id=${leagueId}`;
     logger.info(`fetchAndStoreUpcomingMatchesForLeague -> Récupération des matchs à venir pour la ligue ID ${leagueId}`);
     const data = await fetchData(url);
     if (data && data.events && data.events.length > 0) {
       for (const event of data.events) {
         const query = `
-          INSERT INTO api_events (id_event, strevent, dateevent, isupcoming)
-          VALUES ($1, $2, $3, true)
+          INSERT INTO upcoming_matches (id_event, strevent, dateevent, strtime, venue, strsport, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
           ON CONFLICT (id_event) DO UPDATE
             SET strevent = EXCLUDED.strevent,
                 dateevent = EXCLUDED.dateevent,
-                isupcoming = true,
+                strtime = EXCLUDED.strtime,
+                venue = EXCLUDED.venue,
+                strsport = EXCLUDED.strsport,
                 updated_at = CURRENT_TIMESTAMP;
         `;
-        const values = [event.idEvent, event.strEvent, event.dateEvent];
+        const values = [
+          event.idEvent,
+          event.strEvent,
+          event.dateEvent,
+          event.strTime,       // Heure (vérifiez le nom exact dans la réponse API)
+          event.strVenue,      // Lieu
+          event.strSport       // Type de sport
+        ];
         await db.query(query, values);
       }
       logger.info(`fetchAndStoreUpcomingMatchesForLeague -> ${data.events.length} matchs à venir pour la ligue ${leagueId} mis à jour en BDD.`);
     } else {
-      logger.warn(`fetchAndStoreUpcomingMatchesForLeague -> Aucun match à venir trouvé pour la ligue ${leagueId}`);
+      logger.warn(`fetchAndStoreUpcomingMatchesForLeague -> Aucun match trouvé pour la ligue ${leagueId}`);
     }
   } catch (error) {
     logger.error(`fetchAndStoreUpcomingMatchesForLeague -> Erreur pour la ligue ${leagueId}: ${error.message}`);
