@@ -1,23 +1,17 @@
 // services/apiDataService.js
 const { getEventDetails } = require('./externalApiService');
 const db = require('../utils/database');
-const logger = require('../utils/logger'); // Assure-toi d'avoir créé utils/logger.js avec Winston
+const logger = require('../utils/logger');
 require('dotenv').config();
 
-/**
- * Récupère les données d'un événement via TheSportsDB et les stocke (ou met à jour) dans la table api_events.
- * @param {number|string} eventId - L'ID de l'événement à récupérer.
- * @returns {Promise<void>}
- */
 async function fetchAndStoreEvent(eventId) {
   try {
     logger.info(`fetchAndStoreEvent -> Récupération de l'événement ID=${eventId} via l'API...`);
-    const eventData = await getEventDetails(eventId);
-    if (!eventData) {
-      logger.warn(`fetchAndStoreEvent -> Aucun événement trouvé pour l'ID ${eventId}`);
-      return;
+    const event = await getEventDetails(eventId);
+    if (!event) {
+      logger.warn(`fetchAndStoreEvent -> Aucun événement trouvé pour ID=${eventId}`);
+      return null;
     }
-    // On suppose que eventData contient idEvent, strEvent, et dateEvent
     const query = `
       INSERT INTO api_events (id_event, strEvent, dateEvent)
       VALUES ($1, $2, $3)
@@ -26,9 +20,10 @@ async function fetchAndStoreEvent(eventId) {
             dateEvent = EXCLUDED.dateEvent,
             updated_at = CURRENT_TIMESTAMP;
     `;
-    const values = [eventData.idEvent, eventData.strEvent, eventData.dateEvent];
+    const values = [event.idEvent, event.strEvent, event.dateEvent];
     await db.query(query, values);
-    logger.info(`fetchAndStoreEvent -> Données de l'événement ${eventData.idEvent} mises à jour en BDD.`);
+    logger.info(`fetchAndStoreEvent -> Données de l'événement ${event.idEvent} mises à jour en BDD.`);
+    return event;
   } catch (error) {
     logger.error(`fetchAndStoreEvent -> Erreur pour l'événement ${eventId}: ${error.message}`);
     throw error;
