@@ -4,38 +4,39 @@ const db = require('../utils/database');
 const logger = require('../utils/logger');
 require('dotenv').config();
 
-async function fetchAndStoreTeamInfo(teamName) {
+async function fetchAndStoreAllTeams(sport) {
   try {
     const apiKey = process.env.API_KEY_THE_SPORTS_DB;
     if (!apiKey) {
-      logger.error("fetchAndStoreTeamInfo -> API_KEY_THE_SPORTS_DB non défini.");
+      logger.error("fetchAndStoreAllTeams -> API_KEY_THE_SPORTS_DB non défini.");
       return;
     }
-    const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/searchteams.php?t=${encodeURIComponent(teamName)}`;
-    logger.info(`fetchAndStoreTeamInfo -> Récupération des infos pour l'équipe ${teamName}`);
+    // L'endpoint search_all_teams.php retourne toutes les équipes pour un sport.
+    const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/search_all_teams.php?s=${encodeURIComponent(sport)}`;
+    logger.info(`fetchAndStoreAllTeams -> Récupération de toutes les équipes pour le sport ${sport}`);
     const data = await fetchData(url);
     if (data && data.teams && data.teams.length > 0) {
-      const team = data.teams[0];
-      logger.info(`fetchAndStoreTeamInfo -> Infos récupérées pour ${team.strTeam}`);
-      const query = `
-        INSERT INTO teams (id_team, strTeam, strTeamBadge, strDescriptionEN)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id_team) DO UPDATE
-          SET strTeam = EXCLUDED.strTeam,
-              strTeamBadge = EXCLUDED.strTeamBadge,
-              strDescriptionEN = EXCLUDED.strDescriptionEN,
-              updated_at = CURRENT_TIMESTAMP;
-      `;
-      const values = [team.idTeam, team.strTeam, team.strTeamBadge, team.strDescriptionEN];
-      await db.query(query, values);
-      logger.info(`fetchAndStoreTeamInfo -> Infos de ${team.strTeam} mises à jour en BDD.`);
+      for (const team of data.teams) {
+        const query = `
+          INSERT INTO teams (id_team, strteam, strteambadge, strdescriptionen)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (id_team) DO UPDATE
+            SET strteam = EXCLUDED.strteam,
+                strteambadge = EXCLUDED.strteambadge,
+                strdescriptionen = EXCLUDED.strdescriptionen,
+                updated_at = CURRENT_TIMESTAMP;
+        `;
+        const values = [team.idTeam, team.strTeam, team.strTeamBadge, team.strDescriptionEN];
+        await db.query(query, values);
+      }
+      logger.info(`fetchAndStoreAllTeams -> ${data.teams.length} équipes mises à jour en BDD pour ${sport}.`);
     } else {
-      logger.warn(`fetchAndStoreTeamInfo -> Aucune info trouvée pour ${teamName}`);
+      logger.warn(`fetchAndStoreAllTeams -> Aucune équipe trouvée pour ${sport}`);
     }
   } catch (error) {
-    logger.error(`fetchAndStoreTeamInfo -> Erreur pour ${teamName}: ${error.message}`);
+    logger.error(`fetchAndStoreAllTeams -> Erreur pour ${sport}: ${error.message}`);
     throw error;
   }
 }
 
-module.exports = { fetchAndStoreTeamInfo };
+module.exports = { fetchAndStoreAllTeams };
