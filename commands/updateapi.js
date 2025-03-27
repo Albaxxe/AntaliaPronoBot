@@ -1,13 +1,14 @@
 // commands/updateapi.js
 const { updateAllApiData } = require('../services/apiUpdateScheduler');
+const { SlashCommandBuilder } = require('discord.js');
+
 require('dotenv').config();
 
 module.exports = {
-  data: {
-    name: 'updateapi',
-    description: 'Met à jour manuellement toutes les données de l’API',
-  },
-  async execute(interaction) {
+    data: new SlashCommandBuilder()
+      .setName('updateapi')
+      .setDescription('Met à jour manuellement les données de l’API'),
+    async execute(interaction) {
     // Vérifier que l'utilisateur possède le rôle "Direction"
     const directionRoleId = process.env.DIRECTION_ROLE_ID;
     if (!interaction.member.roles.cache.has(directionRoleId)) {
