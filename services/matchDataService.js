@@ -31,7 +31,7 @@ async function fetchAndStoreUpcomingMatchesForLeague(leagueId) {
           event.idEvent,
           event.strEvent,
           event.dateEvent,
-          event.strTime,       // Heure (vérifiez le nom exact dans la réponse API)
+          event.strTime,       // Heure, vérifiez le nom exact dans la réponse API
           event.strVenue,      // Lieu
           event.strSport       // Type de sport
         ];
