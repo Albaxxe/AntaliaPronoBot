@@ -7,12 +7,9 @@ const { fetchAndStorePlayers } = require('./playerDataService');
 const { fetchAndStoreUpcomingMatches } = require('./matchDataService');
 require('dotenv').config();
 
-/**
- * Démarre le scheduler pour mettre à jour régulièrement les données de l'API.
- */
 function startApiUpdateScheduler() {
   logger.info("Démarrage du scheduler de mise à jour API.");
-  // Planification : toutes les 10 minutes
+  // Planifier toutes les 10 minutes
   cron.schedule('*/10 * * * *', async () => {
     logger.info("Scheduler API : Début de la mise à jour.");
     try {

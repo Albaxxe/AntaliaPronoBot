@@ -14,7 +14,7 @@ module.exports = {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
     logger.info(`Bot connecté en tant que ${client.user.tag}`);
 
-    // Envoyer le message "Bot en ligne" dans le salon de bienvenue (optionnel)
+    // Message "Bot en ligne" dans WELCOME_CHANNEL_ID
     const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
     if (welcomeChannelId) {
       const channel = client.channels.cache.get(welcomeChannelId);
@@ -40,7 +40,7 @@ module.exports = {
         const invites = await guild.invites.fetch();
         client.invites.set(guildId, invites);
       } catch (error) {
-        logger.error(`ready.js : Erreur lors du fetch des invites pour ${guild.name} : ${error.message}`);
+        logger.error(`ready.js : Erreur lors du fetch des invites pour ${guild.name}: ${error.message}`);
       }
     }
 
@@ -50,10 +50,10 @@ module.exports = {
       status: 'online',
     });
 
-    // Synchroniser tous les membres en BDD
+    // Synchroniser les membres en BDD
     await syncMembers.execute(client);
 
-    // Envoyer le panel de ticket dans HELP_CHANNEL_IP
+    // Envoyer le panel de ticket
     await sendTicketPanel(client);
 
     // Récupérer et stocker un événement test via l'API
@@ -65,7 +65,7 @@ module.exports = {
       logger.error(`ready.js : Erreur fetchAndStoreEvent pour l'événement ${testEventId}: ${error.message}`);
     }
 
-    // Démarrer le scheduler de mise à jour des données API
+    // Démarrer le scheduler de mise à jour API
     startApiUpdateScheduler();
 
     console.log('✅ Ready event terminé.');
