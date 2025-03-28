@@ -1,4 +1,5 @@
 // services/apiEventService.js
+const config = require('../config');
 const { fetchData } = require('./apiRequestsService');
 const db = require('../utils/database');
 const logger = require('../utils/logger');

@@ -1,4 +1,5 @@
 // services/apiV2Auth.js
+const config = require('../config');
 const axios = require('axios');
 const logger = require('../utils/logger');
 require('dotenv').config();
