@@ -1,3 +1,4 @@
+const config = require('../config');
 const Bottleneck = require('bottleneck');
 
 const limiter = new Bottleneck({

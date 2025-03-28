@@ -42,4 +42,4 @@ initializeBot(client)
   .catch(error => {
     console.error("❌ Une erreur critique empêche le bot de démarrer :", error);
     process.exit(1);
-  });
+});

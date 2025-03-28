@@ -1,4 +1,5 @@
 // services/apiUpdateScheduler.js
+const config = require('../config');
 const cron = require('node-cron');
 const logger = require('../utils/logger');
 const { fetchAndStoreLeagues } = require('./leagueDataService');
@@ -17,8 +18,11 @@ async function updateAllApiData() {
     
     // Récupérer la liste des ligues depuis la BDD
     const leaguesRes = await db.query(`SELECT id_league FROM leagues`);
-    const leagueIds = leaguesRes.rows.map(row => row.id_league);
-    
+    // Filtrer les lignes dont id_league n'est pas null
+    const leagueIds = leaguesRes.rows
+      .map(row => row.id_league)
+      .filter(id => id !== null);
+      
     for (const leagueId of leagueIds) {
       logger.info(`updateAllApiData -> Mise à jour des équipes pour la ligue ID ${leagueId}`);
       await fetchAndStoreAllTeamsForLeague(leagueId);
@@ -29,7 +33,7 @@ async function updateAllApiData() {
     
     // Récupérer la liste des équipes depuis la table teams
     const teamsRes = await db.query(`SELECT name FROM teams`);
-    const teamNames = teamsRes.rows.map(row => row.name);
+    const teamNames = teamsRes.rows.map(row => row.name).filter(name => name);
     for (const teamName of teamNames) {
       logger.info(`updateAllApiData -> Mise à jour des joueurs pour l'équipe ${teamName}`);
       await fetchAndStorePlayersForTeam(teamName);
@@ -48,8 +52,9 @@ async function updateAllApiData() {
 
 function startApiUpdateScheduler() {
   logger.info("startApiUpdateScheduler -> Démarrage du scheduler de mise à jour API.");
+  // Planifier la mise à jour quotidienne à 6h00 du matin
   cron.schedule('0 6 * * *', async () => {
-    logger.info("Scheduler API -> Début de la mise à jour programmée.");
+    logger.info("Scheduler API -> Début de la mise à jour programmée (6h00 du matin).");
     try {
       await updateAllApiData();
       logger.info("Scheduler API -> Mise à jour programmée terminée avec succès.");

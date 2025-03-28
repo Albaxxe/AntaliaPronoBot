@@ -14,7 +14,7 @@ async function fetchAndStorePlayersForTeam(teamName) {
     const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/lookup_all_players.php?t=${encodeURIComponent(teamName)}`;
     logger.info(`fetchAndStorePlayersForTeam -> Récupération des joueurs pour l'équipe ${teamName}`);
     const data = await fetchData(url);
-    
+
     // Récupérer l'identifiant interne de l'équipe depuis la table teams
     const teamRes = await db.query(
       `SELECT id FROM teams WHERE LOWER(name) = LOWER($1) LIMIT 1`,
@@ -30,6 +30,12 @@ async function fetchAndStorePlayersForTeam(teamName) {
     
     if (data && data.player && data.player.length > 0) {
       for (const player of data.player) {
+        // Vérifiez que le nom du joueur est défini
+        if (!player.strPlayer) {
+          logger.warn(`fetchAndStorePlayersForTeam -> Nom manquant pour le joueur avec id ${player.idPlayer}. Ce joueur sera ignoré.`);
+          continue;
+        }
+        
         // Utiliser defaultTeamId si l'API ne fournit pas idTeam
         let teamId = defaultTeamId;
         if (player.idTeam) {

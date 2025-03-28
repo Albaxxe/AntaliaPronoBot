@@ -1,4 +1,5 @@
 // services/apiV2DataService.js
+const config = require('../config');
 const axios = require('axios');
 const logger = require('../utils/logger');
 const { authenticateV2 } = require('./apiV2Auth');
