@@ -12,3 +12,8 @@ git commit -m "$commitMessage"
 
 echo "Poussée vers GitHub..."
 git push
+echo "DISCORD_TOKEN=your_token_here" > .env.example
+echo "DATABASE_URL=mysql://user:pass@host/db" >> .env.example
+git add .env.example
+git commit -m "🧪 Ajout du fichier .env.example pour les variables d'environnement"
+git push origin main
